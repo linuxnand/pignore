@@ -2,14 +2,14 @@
   "name": "Plex Ignore",
   "short_name": "PlexIgnore",
   "description": "Gestor de .plexignore para archivos MKV",
-  "start_url": "./plexignore.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "scope": "./",
   "background_color": "#080810",
   "theme_color": "#080810",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2092/2092693.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3669/3669509.png",
       "type": "image/png",
       "sizes": "512x512"
     }

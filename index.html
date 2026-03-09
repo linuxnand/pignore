@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#080810">
 <title>Plex Ignore</title>
-<link rel="manifest" href="plex_manifest.json">
+<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@300;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -60,13 +60,37 @@ header{
 /* ── main ── */
 #main{flex:1;display:none;flex-direction:column;overflow:hidden}
 
+/* search bar */
+.search-wrap{
+  padding:9px 12px 0;flex-shrink:0;
+}
+.search-box{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surf);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;transition:border-color .2s;
+}
+.search-box:focus-within{border-color:var(--accent)}
+.search-ico{font-size:.85rem;opacity:.4;flex-shrink:0}
+#search-input{
+  flex:1;background:transparent;border:none;outline:none;
+  color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;
+  caret-color:var(--accent);
+}
+#search-input::placeholder{color:var(--muted)}
+#search-clear{
+  background:none;border:none;color:var(--muted);font-size:.85rem;
+  cursor:pointer;padding:0 2px;display:none;line-height:1;
+}
+#search-clear.visible{display:block}
+
 .toolbar{
   display:flex;align-items:center;gap:8px;
-  padding:9px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
+  padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
+  margin-top:8px;
 }
 .tb-info{flex:1;font-size:.62rem;color:var(--muted)}
 .tb-info b{color:var(--accent3)}
-.tb-info span.ign-count{color:var(--ignored-text)}
+.tb-info .ign-count{color:var(--ignored-text)}
 .btn-sm{
   background:var(--surf);border:1px solid var(--border);border-radius:9px;
   padding:7px 13px;color:var(--text);font-family:'JetBrains Mono',monospace;
@@ -76,8 +100,8 @@ header{
 
 /* filter tabs */
 .tabs{
-  display:flex;gap:6px;padding:8px 14px 0;flex-shrink:0;
-  border-bottom:1px solid var(--border);padding-bottom:8px;
+  display:flex;gap:6px;padding:8px 14px;flex-shrink:0;
+  border-bottom:1px solid var(--border);
 }
 .tab{
   flex:1;text-align:center;padding:6px 4px;border-radius:8px;font-size:.62rem;
@@ -100,7 +124,7 @@ header{
   background:var(--surf);border:1px solid var(--border);border-radius:var(--r);
   padding:12px 13px;display:flex;align-items:center;gap:10px;
   cursor:pointer;transition:border-color .2s,background .15s,opacity .2s;
-  animation:si .22s ease both;
+  animation:si .2s ease both;
 }
 .card:active{background:var(--border)}
 .card.ignored{
@@ -121,11 +145,12 @@ header{
   overflow:hidden;text-overflow:ellipsis;line-height:1.3;
 }
 .card.ignored .ctitle{color:var(--ignored-text)}
+/* highlight matched text */
+.ctitle mark{background:transparent;color:var(--accent);font-weight:800}
 .cmeta{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;align-items:center}
 .badge{font-size:.52rem;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
 .b-sub{background:#111125;color:var(--muted);border:1px solid var(--border)}
 .b-ignored{background:#3a0055;color:var(--ignored-text);border:1px solid var(--ignored-border)}
-.b-ok{background:#0a2a0a;color:var(--accent3);border:1px solid #1a5a1a}
 
 /* ignore button */
 .btn-ign{
@@ -138,16 +163,10 @@ header{
 .btn-ign.done{border-color:var(--accent);color:var(--accent);background:#200030}
 .btn-ign.fail{border-color:var(--danger);color:var(--danger)}
 
-.spin{width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .6s linear infinite;margin:auto}
-@keyframes sp{to{transform:rotate(360deg)}}
-
-/* divider label for subdirs */
 .section-label{
   font-size:.58rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;
   padding:6px 4px 2px;
 }
-
-/* empty state */
 .empty{
   flex:1;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:10px;color:var(--muted);
@@ -155,7 +174,6 @@ header{
 }
 .empty .ei{font-size:2.2rem;opacity:.22}
 
-/* toast */
 #toast{
   position:fixed;bottom:calc(env(safe-area-inset-bottom)+18px);left:50%;
   transform:translateX(-50%) translateY(14px);
@@ -166,7 +184,6 @@ header{
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.err{border-color:var(--danger);color:var(--danger)}
 
-/* glow pulse on ignored count */
 @keyframes gpulse{0%,100%{text-shadow:none}50%{text-shadow:0 0 8px var(--accent)}}
 .just-added{animation:gpulse .6s ease}
 </style>
@@ -192,6 +209,14 @@ header{
 </div>
 
 <div id="main">
+  <div class="search-wrap">
+    <div class="search-box">
+      <span class="search-ico">🔍</span>
+      <input id="search-input" type="search" placeholder="Buscar archivo…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onSearch(this.value)">
+      <button id="search-clear" onclick="clearSearch()">✕</button>
+    </div>
+  </div>
+
   <div class="toolbar">
     <div class="tb-info">
       <b id="lbl-count">–</b> archivos ·
@@ -199,11 +224,13 @@ header{
     </div>
     <button class="btn-sm" onclick="loadFiles()">↻ Refrescar</button>
   </div>
+
   <div class="tabs">
-    <div class="tab active" data-filter="all"    onclick="setFilter('all',this)">Todos</div>
-    <div class="tab"        data-filter="normal" onclick="setFilter('normal',this)">Activos</div>
-    <div class="tab"        data-filter="ignored"onclick="setFilter('ignored',this)">Ignorados</div>
+    <div class="tab active" onclick="setFilter('all',this)">Todos</div>
+    <div class="tab"        onclick="setFilter('normal',this)">Activos</div>
+    <div class="tab"        onclick="setFilter('ignored',this)">Ignorados</div>
   </div>
+
   <div id="list"></div>
 </div>
 
@@ -214,8 +241,9 @@ header{
 const BASE = "http://100.93.228.17:8766";
 
 let allFiles   = [];
-let ignoredSet = new Set();   // rels currently ignored
+let ignoredSet = new Set();
 let filter     = "all";
+let query      = "";
 
 window.addEventListener("DOMContentLoaded", loadFiles);
 
@@ -225,8 +253,7 @@ async function loadFiles() {
   try {
     const res  = await fetchWithTimeout(BASE + "/files", 4500);
     const data = await res.json();
-    allFiles = data;
-    // build ignored set from data
+    allFiles   = data;
     ignoredSet = new Set(data.filter(f => f.ignored).map(f => f.rel));
     setDot("ok", "en línea");
     showMain();
@@ -249,12 +276,8 @@ async function doIgnore(rel) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
-    // mark all returned patterns as ignored
     (data.added || [rel]).forEach(r => ignoredSet.add(r));
-    // also mark in allFiles
-    allFiles.forEach(f => {
-      if (ignoredSet.has(f.rel)) f.ignored = true;
-    });
+    allFiles.forEach(f => { if (ignoredSet.has(f.rel)) f.ignored = true; });
     updateCounts();
     renderList();
     const extra = data.added && data.added.length > 1
@@ -265,53 +288,78 @@ async function doIgnore(rel) {
   }
 }
 
+/* ── search ── */
+function onSearch(val) {
+  query = val.trim().toLowerCase();
+  document.getElementById("search-clear").className = query ? "visible" : "";
+  renderList();
+}
+
+function clearSearch() {
+  document.getElementById("search-input").value = "";
+  onSearch("");
+  document.getElementById("search-input").focus();
+}
+
 /* ── render ── */
+function getVisible() {
+  let list = allFiles;
+  if (filter === "ignored") list = list.filter(f => f.ignored);
+  if (filter === "normal")  list = list.filter(f => !f.ignored);
+  if (query) list = list.filter(f => f.title.toLowerCase().includes(query));
+  return list;
+}
+
 function renderList() {
-  const list = document.getElementById("list");
-  let visible = allFiles;
-  if (filter === "ignored") visible = allFiles.filter(f => f.ignored);
-  if (filter === "normal")  visible = allFiles.filter(f => !f.ignored);
+  const listEl  = document.getElementById("list");
+  const visible = getVisible();
 
   if (!visible.length) {
-    list.innerHTML = `<div class="empty"><div class="ei">🎬</div>Sin archivos${filter!=="all"?" en esta categoría":""}</div>`;
+    listEl.innerHTML = `<div class="empty"><div class="ei">${query ? "🔎" : "🎬"}</div>${query ? "Sin resultados para \"" + esc(query) + "\"" : "Sin archivos en esta categoría"}</div>`;
     return;
   }
 
-  // separate root vs subdir
   const roots = visible.filter(f => !f.subdir);
   const subs  = visible.filter(f =>  f.subdir);
 
-  list.innerHTML = "";
-  roots.forEach((f,i) => list.appendChild(buildCard(f, i)));
+  listEl.innerHTML = "";
+  roots.forEach((f, i) => listEl.appendChild(buildCard(f, i)));
   if (subs.length) {
     const lbl = document.createElement("div");
     lbl.className = "section-label";
     lbl.textContent = "── Subdirectorios / Hardlinks";
-    list.appendChild(lbl);
-    subs.forEach((f,i) => list.appendChild(buildCard(f, i + roots.length)));
+    listEl.appendChild(lbl);
+    subs.forEach((f, i) => listEl.appendChild(buildCard(f, i + roots.length)));
   }
+}
+
+function highlight(text, q) {
+  if (!q) return esc(text);
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return esc(text);
+  return esc(text.slice(0, idx))
+    + "<mark>" + esc(text.slice(idx, idx + q.length)) + "</mark>"
+    + esc(text.slice(idx + q.length));
 }
 
 function buildCard(f, i) {
   const card = document.createElement("div");
   card.className = "card" + (f.ignored ? " ignored" : "") + (f.subdir ? " subdir" : "");
-  card.style.animationDelay = Math.min(i * 20, 300) + "ms";
+  card.style.animationDelay = Math.min(i * 18, 280) + "ms";
   card.dataset.rel = f.rel;
 
-  const ico = f.ignored ? "🚫" : (f.subdir ? "🔗" : "🎬");
-
-  const badges = [
-    f.subdir   ? `<span class="badge b-sub">📁 ${esc(f.subdir)}</span>` : "",
-    f.ignored  ? `<span class="badge b-ignored">ignorado por plex</span>` : "",
-  ].filter(Boolean).join("");
-
+  const ico      = f.ignored ? "🚫" : (f.subdir ? "🔗" : "🎬");
   const btnLabel = f.ignored ? "✓ Ignorado" : "⊘ Ignorar";
   const btnClass = f.ignored ? "btn-ign done" : "btn-ign";
+  const badges   = [
+    f.subdir  ? `<span class="badge b-sub">📁 ${esc(f.subdir)}</span>` : "",
+    f.ignored ? `<span class="badge b-ignored">ignorado por plex</span>` : "",
+  ].filter(Boolean).join("");
 
   card.innerHTML = `
     <div class="ico">${ico}</div>
     <div class="cbody">
-      <div class="ctitle" title="${esc(f.rel)}">${esc(f.title)}</div>
+      <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
       <div class="cmeta">${badges}</div>
     </div>
     <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}')">
@@ -326,15 +374,12 @@ function buildCard(f, i) {
 
 async function handleIgnore(e, rel) {
   e.stopPropagation();
-  const card = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
-  const btn  = card?.querySelector(".btn-ign");
+  const card    = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
+  const btn     = card?.querySelector(".btn-ign");
   const fileObj = allFiles.find(f => f.rel === rel);
-
   if (!card || fileObj?.ignored || card.classList.contains("busy")) return;
-
   card.classList.add("busy");
   if (btn) btn.textContent = "…";
-
   await doIgnore(rel);
 }
 
@@ -364,18 +409,15 @@ function showMain() {
   document.getElementById("offline-banner").style.display = "none";
   document.getElementById("main").style.display = "flex";
 }
-
 function fetchWithTimeout(url, ms) {
   const ctrl = new AbortController();
   setTimeout(() => ctrl.abort(), ms);
   return fetch(url, {signal: ctrl.signal});
 }
-
 function setDot(type, text="") {
   document.getElementById("dot").className = type;
   document.getElementById("lbl-status").textContent = text;
 }
-
 let _tt;
 function toast(msg, isErr=false) {
   const el = document.getElementById("toast");
@@ -384,7 +426,6 @@ function toast(msg, isErr=false) {
   el.className = "show" + (isErr ? " err" : "");
   _tt = setTimeout(() => { el.className = ""; }, 3400);
 }
-
 function esc(s) {
   return String(s)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;")
