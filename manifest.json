@@ -1,24 +1,17 @@
 {
-  "name": "MKV Vault",
-  "short_name": "MKVault",
-  "description": "Hard-link manager for MKV files",
-  "start_url": ".",
+  "name": "Plex Ignore",
+  "short_name": "PlexIgnore",
+  "description": "Gestor de .plexignore para archivos MKV",
+  "start_url": "./plexignore.html",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
-  "orientation": "portrait",
+  "scope": "./",
+  "background_color": "#080810",
+  "theme_color": "#080810",
   "icons": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
+      "src": "https://cdn-icons-png.flaticon.com/512/2092/2092693.png",
       "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
   ]
 }
