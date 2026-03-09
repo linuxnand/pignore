@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0f">
+<title>MKV Vault</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@300;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0f;--surf:#111118;--border:#1d1d2b;
+  --accent:#c8f03c;--accent2:#3cffc8;--muted:#3a3a55;
+  --text:#e2e2ef;--danger:#ff4466;--r:13px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100dvh}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;letter-spacing:-.02em;color:var(--accent)}
+.logo em{color:var(--text);opacity:.35;font-style:normal}
+.hdr-right{display:flex;align-items:center;gap:8px}
+#dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .4s}
+#dot.ok{background:var(--accent);box-shadow:0 0 7px var(--accent)}
+#dot.err{background:var(--danger);box-shadow:0 0 7px var(--danger)}
+#lbl-status{font-size:.6rem;color:var(--muted)}
+
+/* offline banner */
+#offline-banner{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:32px 24px;flex:1;text-align:center;
+}
+#offline-banner .ei{font-size:2.8rem;opacity:.3}
+#offline-banner h3{font-family:'Syne',sans-serif;font-size:1rem;color:var(--text)}
+#offline-banner p{font-size:.68rem;color:var(--muted);line-height:1.7;max-width:260px}
+#offline-banner code{
+  background:var(--surf);border:1px solid var(--border);border-radius:7px;
+  padding:10px 16px;font-size:.75rem;color:var(--accent2);display:block;
+  text-align:left;white-space:pre;line-height:1.6;
+}
+.btn-retry{
+  background:var(--surf);border:1px solid var(--border);border-radius:var(--r);
+  padding:12px 24px;color:var(--text);font-family:'JetBrains Mono',monospace;
+  font-size:.8rem;cursor:pointer;transition:border-color .15s,background .15s;
+}
+.btn-retry:active{background:var(--border)}
+.btn-retry:hover{border-color:var(--accent);color:var(--accent)}
+
+/* main */
+#main{flex:1;display:none;flex-direction:column;overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.tb-info{flex:1;font-size:.63rem;color:var(--muted)}
+.tb-info b{color:var(--accent2)}
+.btn-sm{background:var(--surf);border:1px solid var(--border);border-radius:9px;padding:7px 13px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.65rem;cursor:pointer;transition:background .15s;white-space:nowrap}
+.btn-sm:active{background:var(--border)}
+
+#list{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
+#list::-webkit-scrollbar{width:2px}
+#list::-webkit-scrollbar-thumb{background:var(--border)}
+
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;display:flex;align-items:center;gap:11px;cursor:pointer;transition:border-color .2s,background .15s;animation:si .22s ease both}
+.card:active{background:var(--border)}
+.card.linked{border-color:var(--accent)}
+.card.linked .ico{color:var(--accent)}
+.card.busy{opacity:.55;pointer-events:none}
+.card.fail{border-color:var(--danger)}
+@keyframes si{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+
+.ico{font-size:1.2rem;width:26px;text-align:center;color:var(--muted);flex-shrink:0;transition:color .3s}
+.cbody{flex:1;min-width:0}
+.ctitle{font-size:.76rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.cmeta{display:flex;gap:6px;margin-top:4px}
+.badge{font-size:.55rem;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.srt{background:#142514;color:var(--accent2);border:1px solid #254525}
+.nosrt{background:#161620;color:var(--muted);border:1px solid var(--border)}
+.done-b{background:#142205;color:var(--accent);border:1px solid #2a4a08}
+
+.btn-lnk{flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:.68rem;color:var(--text);cursor:pointer;font-family:'JetBrains Mono',monospace;font-weight:600;transition:border-color .15s,color .15s,background .15s;white-space:nowrap}
+.btn-lnk:active{background:var(--border)}
+.btn-lnk.done{border-color:var(--accent);color:var(--accent);background:#0e1a04}
+.btn-lnk.fail{border-color:var(--danger);color:var(--danger)}
+
+.spin{width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .6s linear infinite;margin:auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading-wrap{flex:1;display:flex;align-items:center;justify-content:center}
+
+#toast{position:fixed;bottom:calc(env(safe-area-inset-bottom)+18px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--surf);border:1px solid var(--accent);border-radius:9px;padding:9px 18px;font-size:.72rem;color:var(--accent);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:99}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--danger);color:var(--danger)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+  <div class="logo">MKV<em>vault</em></div>
+  <div class="hdr-right">
+    <span id="lbl-status"></span>
+    <div id="dot"></div>
+  </div>
+</header>
+
+<!-- Offline: instrucciones para arrancar el server -->
+<div id="offline-banner">
+  <div class="ei">🖥️</div>
+  <h3>Server apagado</h3>
+  <p>Doble clic en <strong style="color:var(--accent)">iniciar.bat</strong> en tu PC y esperá unos segundos.</p>
+  <code>📁 MKV-Vault\
+  ├── iniciar.bat  ← doble clic
+  ├── server.py
+  └── config.txt</code>
+  <p style="font-size:.62rem">El server se apaga solo tras 5 min sin uso.</p>
+  <button class="btn-retry" onclick="retryConnect()">↻ Reintentar conexión</button>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div class="toolbar">
+    <div class="tb-info"><b id="lbl-count">–</b> archivos recientes</div>
+    <button class="btn-sm" onclick="loadFiles()">↻ Refrescar</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const BASE   = "http://100.93.228.17:8765";
+const linked = new Set();
+
+window.addEventListener("DOMContentLoaded", loadFiles);
+
+async function loadFiles() {
+  showLoading();
+  setDot("", "conectando…");
+  try {
+    const res  = await fetchWithTimeout(BASE + "/files", 4000);
+    const data = await res.json();
+    document.getElementById("lbl-count").textContent = data.length;
+    setDot("ok", "en línea");
+    showMain();
+    renderList(data);
+  } catch(e) {
+    setDot("err", "sin conexión");
+    showOffline();
+  }
+}
+
+async function retryConnect() {
+  showLoading();
+  await loadFiles();
+}
+
+function showLoading() {
+  document.getElementById("offline-banner").style.display = "none";
+  document.getElementById("main").style.display = "none";
+  // muestra spinner en header temporalmente
+  setDot("", "conectando…");
+}
+function showOffline() {
+  document.getElementById("offline-banner").style.display = "flex";
+  document.getElementById("main").style.display = "none";
+}
+function showMain() {
+  document.getElementById("offline-banner").style.display = "none";
+  document.getElementById("main").style.display = "flex";
+}
+
+function renderList(data) {
+  const list = document.getElementById("list");
+  if (!data.length) {
+    list.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:.75rem;text-align:center;padding:40px"><div style="font-size:2.2rem;opacity:.25">📂</div>Sin archivos MKV recientes.</div>`;
+    return;
+  }
+  list.innerHTML = "";
+  data.forEach((f, i) => list.appendChild(buildCard(f, i)));
+}
+
+function buildCard(f, i) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.animationDelay = (i * 25) + "ms";
+  card.dataset.name = f.name;
+  const done = linked.has(f.name);
+  if (done) card.classList.add("linked");
+  card.innerHTML = `
+    <div class="ico">${done ? "✔" : "🎬"}</div>
+    <div class="cbody">
+      <div class="ctitle" title="${esc(f.name)}">${esc(f.title)}</div>
+      <div class="cmeta">
+        ${f.has_srt ? `<span class="badge srt">SRT ✓</span>` : `<span class="badge nosrt">sin SRT</span>`}
+        ${done ? `<span class="badge done-b">linkeado</span>` : ""}
+      </div>
+    </div>
+    <button class="btn-lnk${done ? " done" : ""}" onclick="doLink(event,'${esc(f.name)}')">
+      ${done ? "✔ Hecho" : "⊕ Link"}
+    </button>`;
+  card.addEventListener("click", e => { if (!e.target.closest("button")) doLink(e, f.name); });
+  return card;
+}
+
+async function doLink(e, filename) {
+  e.stopPropagation();
+  const card = document.querySelector(`.card[data-name="${CSS.escape(filename)}"]`);
+  const btn  = card?.querySelector(".btn-lnk");
+  if (!card || card.classList.contains("linked") || card.classList.contains("busy")) return;
+
+  card.classList.add("busy");
+  if (btn) btn.textContent = "…";
+
+  try {
+    const res  = await fetch(BASE + "/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+
+    linked.add(filename);
+    card.classList.remove("busy");
+    card.classList.add("linked");
+    card.querySelector(".ico").textContent = "✔";
+    if (btn) { btn.textContent = "✔ Hecho"; btn.classList.add("done"); }
+    const meta = card.querySelector(".cmeta");
+    if (meta && !meta.querySelector(".done-b")) {
+      const b = document.createElement("span");
+      b.className = "badge done-b"; b.textContent = "linkeado";
+      meta.appendChild(b);
+    }
+    const srtMsg = data.result?.srt === "copied" ? " · SRT copiado ✓" : "";
+    toast("Hard-link creado" + srtMsg);
+  } catch(err) {
+    card.classList.remove("busy");
+    card.classList.add("fail");
+    if (btn) { btn.textContent = "✕ Error"; btn.classList.add("fail"); }
+    toast("Error: " + err.message, true);
+  }
+}
+
+function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal });
+}
+
+function setDot(type, text = "") {
+  document.getElementById("dot").className = type;
+  document.getElementById("lbl-status").textContent = text;
+}
+let _tt;
+function toast(msg, isErr = false) {
+  const el = document.getElementById("toast");
+  clearTimeout(_tt);
+  el.textContent = msg;
+  el.className = "show" + (isErr ? " err" : "");
+  _tt = setTimeout(() => { el.className = ""; }, 3200);
+}
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+</script>
+</body>
+</html>
