@@ -361,23 +361,18 @@ function renderList() {
     return;
   }
 
-  const roots = visible.filter(f => !f.subdir);
-  const subs  = visible.filter(f =>  f.subdir);
-
+  // Server already returns newest-first. Just render in order.
   listEl.innerHTML = "";
-  roots.forEach((f, i) => listEl.appendChild(buildCard(f, i)));
-  if (subs.length) {
-    const lbl = document.createElement("div");
-    lbl.className = "section-label";
-    lbl.textContent = "── Subdirectorios / Hardlinks";
-    listEl.appendChild(lbl);
-    subs.forEach((f, i) => listEl.appendChild(buildCard(f, i + roots.length)));
-  }
+  visible.forEach((f, i) => listEl.appendChild(buildCard(f, i)));
 }
 
 function highlight(text, q) {
   if (!q) return esc(text);
-  const idx = text.toLowerCase().indexOf(q);
+  // Try to match against "dots as spaces" version too
+  const textDots   = text.toLowerCase();
+  const textSpaces = textDots.replace(/\./g, ' ');
+  let idx = textDots.indexOf(q);
+  if (idx === -1) idx = textSpaces.indexOf(q);
   if (idx === -1) return esc(text);
   return esc(text.slice(0, idx))
     + "<mark>" + esc(text.slice(idx, idx + q.length)) + "</mark>"
@@ -387,18 +382,18 @@ function highlight(text, q) {
 function buildCard(f, i) {
   const isCoveredByDir = f.covered_by_dir && !f.ignored_explicitly;
   const isIgnored      = f.ignored;
-  const hasSubdir      = f.has_subdir_copy;  // shown as subdir copy, root is auto-hidden
+  const inSubdir       = !!f.subdir;   // lives inside a Radarr/media folder
 
   const card = document.createElement("div");
   let cardClass = "card";
-  if (isCoveredByDir) cardClass += " covered";
-  else if (isIgnored) cardClass += " ignored";
-  if (f.subdir) cardClass += " subdir";
+  if (isCoveredByDir)    cardClass += " covered";
+  else if (isIgnored)    cardClass += " ignored";
   card.className = cardClass;
   card.style.animationDelay = Math.min(i * 18, 280) + "ms";
   card.dataset.rel = f.rel;
 
-  const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (f.subdir ? "📂" : "🎬"));
+  // Icon: 📂 = inside Radarr folder, 🚫 = ignored, 🎬 = normal root
+  const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (inSubdir ? "📂" : "🎬"));
 
   let btnLabel, btnClass;
   if (isCoveredByDir) {
@@ -414,22 +409,16 @@ function buildCard(f, i) {
 
   const rootRel = esc(f.root_rel || f.rel);
 
-  const badges = [
-    hasSubdir && !f.subdir
-      ? `<span class="badge b-sub" title="${esc(f.rel)}">📂 en carpeta</span>` : "",
-    f.subdir && !hasSubdir
-      ? `<span class="badge b-sub">📁 ${esc(f.subdir)}</span>` : "",
-    isCoveredByDir
-      ? `<span class="badge b-covered" title="${esc(f.covered_by_dir)}">cubierto · ${esc(f.covered_by_dir)}</span>` : "",
-    isIgnored && !isCoveredByDir
-      ? `<span class="badge b-ignored">ignorado por plex</span>` : "",
-  ].filter(Boolean).join("");
+  // Only show badge if covered by dir pattern (rare, season packs etc)
+  const badge = isCoveredByDir
+    ? `<span class="badge b-covered" title="${esc(f.covered_by_dir)}">carpeta ignorada</span>`
+    : (isIgnored && !isCoveredByDir ? `<span class="badge b-ignored">ignorado</span>` : "");
 
   card.innerHTML = `
     <div class="ico">${ico}</div>
     <div class="cbody">
       <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
-      <div class="cmeta">${badges}</div>
+      <div class="cmeta">${badge}</div>
     </div>
     <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rootRel}')"${isCoveredByDir ? " disabled" : ""}>
       ${btnLabel}
