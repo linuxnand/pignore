@@ -345,7 +345,10 @@ function getVisible() {
   let list = allFiles;
   if (filter === "ignored") list = list.filter(f => f.ignored);
   if (filter === "normal")  list = list.filter(f => !f.ignored);
-  if (query) list = list.filter(f => f.title.toLowerCase().includes(query));
+  if (query) list = list.filter(f => {
+    const t = f.title.toLowerCase();
+    return t.includes(query) || t.replace(/\./g, ' ').includes(query);
+  });
   return list;
 }
 
