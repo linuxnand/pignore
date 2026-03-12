@@ -273,40 +273,36 @@ async function loadFiles() {
 
 async function retryConnect() { await loadFiles(); }
 
-async function doIgnore(rel, rootRel) {
+async function doIgnore(rel, rootRel, subdir) {
   try {
     const res  = await fetch(BASE + "/ignore", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ rel, root_rel: rootRel || rel })
+      body: JSON.stringify({ rel, root_rel: rootRel || rel, subdir: subdir || "" })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
-
     if (data.files) {
       allFiles   = data.files;
       ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
     }
-
     updateCounts();
     renderList();
-
     let msg = "Agregado a .plexignore";
-    if (data.added && data.added.length > 1)   msg += ` · ${data.added.length} patrones`;
-    if (data.skipped && data.skipped.length)   msg += ` · ${data.skipped.length} ya cubiertos`;
-    if (data.pruned  && data.pruned.length)    msg += ` · ${data.pruned.length} redundantes eliminados`;
+    if (data.added && data.added.length > 1)  msg += ` (${data.added.join(", ")})`;
+    if (data.skipped && data.skipped.length)  msg += ` · ${data.skipped.length} ya cubiertos`;
     toast(msg, false, data.skipped && data.skipped.length > 0);
   } catch(err) {
     toast("Error: " + err.message, true);
   }
 }
 
-async function doUnignore(rel, rootRel) {
+async function doUnignore(rel, rootRel, subdir) {
   try {
     const res  = await fetch(BASE + "/unignore", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ rel, root_rel: rootRel || rel })
+      body: JSON.stringify({ rel, root_rel: rootRel || rel, subdir: subdir || "" })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
@@ -320,7 +316,7 @@ async function doUnignore(rel, rootRel) {
     renderList();
 
     let msg = "Eliminado de .plexignore";
-    if (data.removed && data.removed.length > 1) msg += ` · ${data.removed.length} patrones`;
+    if (data.removed && data.removed.length) msg += `: ${data.removed.join(", ")}`;
     toast(msg);
   } catch(err) {
     toast("Error: " + err.message, true);
@@ -382,7 +378,7 @@ function highlight(text, q) {
 function buildCard(f, i) {
   const isCoveredByDir = f.covered_by_dir && !f.ignored_explicitly;
   const isIgnored      = f.ignored;
-  const inSubdir       = !!f.subdir;   // lives inside a Radarr/media folder
+  const inSubdir       = !!f.subdir;
 
   const card = document.createElement("div");
   let cardClass = "card";
@@ -392,7 +388,7 @@ function buildCard(f, i) {
   card.style.animationDelay = Math.min(i * 18, 280) + "ms";
   card.dataset.rel = f.rel;
 
-  // Icon: 📂 = inside Radarr folder, 🚫 = ignored, 🎬 = normal root
+  // Icon: 📂 = inside Radarr/media folder, 🚫 = ignored, 🎬 = normal root
   const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (inSubdir ? "📂" : "🎬"));
 
   let btnLabel, btnClass;
@@ -407,12 +403,12 @@ function buildCard(f, i) {
     btnClass = "btn-ign";
   }
 
-  const rootRel = esc(f.root_rel || f.rel);
+  const rRel   = esc(f.root_rel || f.rel);
+  const subdir = esc(f.subdir   || "");
 
-  // Only show badge if covered by dir pattern (rare, season packs etc)
   const badge = isCoveredByDir
     ? `<span class="badge b-covered" title="${esc(f.covered_by_dir)}">carpeta ignorada</span>`
-    : (isIgnored && !isCoveredByDir ? `<span class="badge b-ignored">ignorado</span>` : "");
+    : (isIgnored ? `<span class="badge b-ignored">ignorado</span>` : "");
 
   card.innerHTML = `
     <div class="ico">${ico}</div>
@@ -420,17 +416,17 @@ function buildCard(f, i) {
       <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
       <div class="cmeta">${badge}</div>
     </div>
-    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rootRel}')"${isCoveredByDir ? " disabled" : ""}>
+    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rRel}','${subdir}')"${isCoveredByDir ? " disabled" : ""}>
       ${btnLabel}
     </button>`;
 
   card.addEventListener("click", e => {
-    if (!e.target.closest("button")) handleIgnore(e, f.rel, f.root_rel || f.rel);
+    if (!e.target.closest("button")) handleIgnore(e, f.rel, f.root_rel || f.rel, f.subdir || "");
   });
   return card;
 }
 
-async function handleIgnore(e, rel, rootRel) {
+async function handleIgnore(e, rel, rootRel, subdir) {
   e.stopPropagation();
   const card    = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
   const fileObj = allFiles.find(f => f.rel === rel);
@@ -440,9 +436,9 @@ async function handleIgnore(e, rel, rootRel) {
   const btn = card.querySelector(".btn-ign");
   if (btn) btn.textContent = "…";
   if (fileObj?.ignored) {
-    await doUnignore(rel, rootRel);
+    await doUnignore(rel, rootRel, subdir);
   } else {
-    await doIgnore(rel, rootRel);
+    await doIgnore(rel, rootRel, subdir);
   }
 }
 
