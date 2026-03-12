@@ -302,6 +302,32 @@ async function doIgnore(rel) {
   }
 }
 
+async function doUnignore(rel) {
+  try {
+    const res  = await fetch(BASE + "/unignore", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ rel })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+
+    if (data.files) {
+      allFiles   = data.files;
+      ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
+    }
+
+    updateCounts();
+    renderList();
+
+    let msg = "Eliminado de .plexignore";
+    if (data.removed && data.removed.length > 1) msg += ` · ${data.removed.length} patrones`;
+    toast(msg);
+  } catch(err) {
+    toast("Error: " + err.message, true);
+  }
+}
+
 /* ── search ── */
 function onSearch(val) {
   query = val.trim().toLowerCase();
@@ -376,7 +402,7 @@ function buildCard(f, i) {
     btnLabel = "📁 carpeta";
     btnClass = "btn-ign covered";
   } else if (isIgnored) {
-    btnLabel = "✓ Ignorado";
+    btnLabel = "✕ Quitar";
     btnClass = "btn-ign done";
   } else {
     btnLabel = "⊘ Ignorar";
@@ -398,7 +424,7 @@ function buildCard(f, i) {
       <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
       <div class="cmeta">${badges}</div>
     </div>
-    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}')"${isCoveredByDir || isIgnored ? " disabled" : ""}>
+    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}')"${isCoveredByDir ? " disabled" : ""}>
       ${btnLabel}
     </button>`;
 
@@ -412,11 +438,17 @@ async function handleIgnore(e, rel) {
   e.stopPropagation();
   const card    = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
   const fileObj = allFiles.find(f => f.rel === rel);
-  if (!card || fileObj?.ignored || card.classList.contains("busy")) return;
+  if (!card || card.classList.contains("busy")) return;
+  // covered-by-dir cards are not actionable
+  if (fileObj?.covered_by_dir && !fileObj?.ignored_explicitly) return;
   card.classList.add("busy");
   const btn = card.querySelector(".btn-ign");
   if (btn) btn.textContent = "…";
-  await doIgnore(rel);
+  if (fileObj?.ignored) {
+    await doUnignore(rel);
+  } else {
+    await doIgnore(rel);
+  }
 }
 
 /* ── UI helpers ── */
