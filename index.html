@@ -283,22 +283,11 @@ async function doIgnore(rel) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
 
-    // Mark all files now covered (added patterns + any now covered by dir wildcard)
-    const addedPats = data.added || [rel];
-    addedPats.forEach(pat => ignoredSet.add(pat));
-
-    // Re-evaluate covered_by_dir for all files (server will do it on next load,
-    // but we do a quick client-side pass to reflect immediately)
-    allFiles.forEach(f => {
-      if (!f.ignored) {
-        const nowCovered = addedPats.some(pat => matchPattern(pat, f.rel));
-        if (nowCovered) { f.ignored = true; f.covered_by_dir = addedPats[0]; }
-      }
-      // Clear covered_by_dir for files that were just pruned
-      if (data.pruned && data.pruned.length) {
-        // Refresh will sort it out properly; just mark all matched as ignored
-      }
-    });
+    // Use fresh file list from server — no client-side guessing needed
+    if (data.files) {
+      allFiles   = data.files;
+      ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
+    }
 
     updateCounts();
     renderList();
@@ -311,13 +300,6 @@ async function doIgnore(rel) {
   } catch(err) {
     toast("Error: " + err.message, true);
   }
-}
-
-/* Simple client-side fnmatch for * wildcard only */
-function matchPattern(pattern, str) {
-  // Escape regex special chars except *
-  const re = "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$";
-  return new RegExp(re).test(str);
 }
 
 /* ── search ── */
