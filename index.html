@@ -273,17 +273,16 @@ async function loadFiles() {
 
 async function retryConnect() { await loadFiles(); }
 
-async function doIgnore(rel) {
+async function doIgnore(rel, rootRel) {
   try {
     const res  = await fetch(BASE + "/ignore", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ rel })
+      body: JSON.stringify({ rel, root_rel: rootRel || rel })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
 
-    // Use fresh file list from server — no client-side guessing needed
     if (data.files) {
       allFiles   = data.files;
       ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
@@ -302,12 +301,12 @@ async function doIgnore(rel) {
   }
 }
 
-async function doUnignore(rel) {
+async function doUnignore(rel, rootRel) {
   try {
     const res  = await fetch(BASE + "/unignore", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ rel })
+      body: JSON.stringify({ rel, root_rel: rootRel || rel })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
@@ -385,6 +384,7 @@ function highlight(text, q) {
 function buildCard(f, i) {
   const isCoveredByDir = f.covered_by_dir && !f.ignored_explicitly;
   const isIgnored      = f.ignored;
+  const hasSubdir      = f.has_subdir_copy;  // shown as subdir copy, root is auto-hidden
 
   const card = document.createElement("div");
   let cardClass = "card";
@@ -395,7 +395,7 @@ function buildCard(f, i) {
   card.style.animationDelay = Math.min(i * 18, 280) + "ms";
   card.dataset.rel = f.rel;
 
-  const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (f.subdir ? "🔗" : "🎬"));
+  const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (f.subdir ? "📂" : "🎬"));
 
   let btnLabel, btnClass;
   if (isCoveredByDir) {
@@ -409,8 +409,12 @@ function buildCard(f, i) {
     btnClass = "btn-ign";
   }
 
+  const rootRel = esc(f.root_rel || f.rel);
+
   const badges = [
-    f.subdir
+    hasSubdir && !f.subdir
+      ? `<span class="badge b-sub" title="${esc(f.rel)}">📂 en carpeta</span>` : "",
+    f.subdir && !hasSubdir
       ? `<span class="badge b-sub">📁 ${esc(f.subdir)}</span>` : "",
     isCoveredByDir
       ? `<span class="badge b-covered" title="${esc(f.covered_by_dir)}">cubierto · ${esc(f.covered_by_dir)}</span>` : "",
@@ -424,30 +428,29 @@ function buildCard(f, i) {
       <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
       <div class="cmeta">${badges}</div>
     </div>
-    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}')"${isCoveredByDir ? " disabled" : ""}>
+    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rootRel}')"${isCoveredByDir ? " disabled" : ""}>
       ${btnLabel}
     </button>`;
 
   card.addEventListener("click", e => {
-    if (!e.target.closest("button")) handleIgnore(e, f.rel);
+    if (!e.target.closest("button")) handleIgnore(e, f.rel, f.root_rel || f.rel);
   });
   return card;
 }
 
-async function handleIgnore(e, rel) {
+async function handleIgnore(e, rel, rootRel) {
   e.stopPropagation();
   const card    = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
   const fileObj = allFiles.find(f => f.rel === rel);
   if (!card || card.classList.contains("busy")) return;
-  // covered-by-dir cards are not actionable
   if (fileObj?.covered_by_dir && !fileObj?.ignored_explicitly) return;
   card.classList.add("busy");
   const btn = card.querySelector(".btn-ign");
   if (btn) btn.textContent = "…";
   if (fileObj?.ignored) {
-    await doUnignore(rel);
+    await doUnignore(rel, rootRel);
   } else {
-    await doIgnore(rel);
+    await doIgnore(rel, rootRel);
   }
 }
 
