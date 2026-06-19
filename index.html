@@ -16,6 +16,8 @@
   --muted:#3a3a58;--text:#dcdcf0;--danger:#ff4455;
   --ignored:#2a0a3a;--ignored-border:#9020d0;--ignored-text:#d080ff;
   --covered:#0a1e2a;--covered-border:#2060a0;--covered-text:#60b8ff;
+  --folder-bg:#111820;--folder-border:#1e3040;--folder-text:#80c8ff;
+  --folder-ign-bg:#1a0a2a;--folder-ign-border:#6020b0;--folder-ign-text:#c070ff;
   --r:13px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -118,7 +120,7 @@ header{
 #list::-webkit-scrollbar{width:2px}
 #list::-webkit-scrollbar-thumb{background:var(--border)}
 
-/* ── cards ── */
+/* ── cards (archivos) ── */
 .card{
   background:var(--surf);border:1px solid var(--border);border-radius:var(--r);
   padding:12px 13px;display:flex;align-items:center;gap:10px;
@@ -126,10 +128,13 @@ header{
   animation:si .2s ease both;
 }
 .card:active{background:var(--border)}
+
+/* archivo ignorado explícitamente */
 .card.ignored{
   background:var(--ignored);border-color:var(--ignored-border);
   border-left:3px solid var(--accent);
 }
+/* archivo cubierto por carpeta ignorada */
 .card.covered{
   background:var(--covered);border-color:var(--covered-border);
   border-left:3px solid var(--covered-border);
@@ -139,6 +144,32 @@ header{
 .card.busy{opacity:.5;pointer-events:none}
 .card.fail{border-color:var(--danger)}
 .card.subdir{opacity:.88}
+
+/* ── cards (carpetas) ── */
+.folder-card{
+  background:var(--folder-bg);border:1px solid var(--folder-border);border-radius:var(--r);
+  padding:11px 13px;display:flex;align-items:center;gap:10px;
+  cursor:pointer;transition:border-color .2s,background .15s,opacity .2s;
+  animation:si .2s ease both;border-left:3px solid var(--folder-border);
+}
+.folder-card:active{background:var(--border)}
+.folder-card.ignored{
+  background:var(--folder-ign-bg);border-color:var(--folder-ign-border);
+  border-left:3px solid var(--folder-ign-border);
+}
+.folder-card.busy{opacity:.5;pointer-events:none}
+.folder-card .ico{font-size:1.1rem;width:24px;text-align:center;flex-shrink:0;
+  color:var(--folder-text);transition:color .3s}
+.folder-card.ignored .ico{color:var(--folder-ign-text)}
+.folder-card .cbody{flex:1;min-width:0}
+.folder-card .ctitle{
+  font-size:.72rem;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;line-height:1.3;
+  color:var(--folder-text);
+}
+.folder-card.ignored .ctitle{color:var(--folder-ign-text)}
+.folder-card .cmeta{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;align-items:center}
+
 @keyframes si{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
 .ico{font-size:1.1rem;width:24px;text-align:center;color:var(--muted);flex-shrink:0;transition:color .3s}
@@ -155,6 +186,8 @@ header{
 .b-sub{background:#111125;color:var(--muted);border:1px solid var(--border)}
 .b-ignored{background:#3a0055;color:var(--ignored-text);border:1px solid var(--ignored-border)}
 .b-covered{background:#0a1830;color:var(--covered-text);border:1px solid var(--covered-border)}
+.b-folder{background:#102030;color:var(--folder-text);border:1px solid var(--folder-border)}
+.b-folder-ign{background:#1a0a30;color:var(--folder-ign-text);border:1px solid var(--folder-ign-border)}
 
 /* ignore button */
 .btn-ign{
@@ -165,7 +198,8 @@ header{
 }
 .btn-ign:active{background:var(--border)}
 .btn-ign.done{border-color:var(--accent);color:var(--accent);background:#200030}
-.btn-ign.covered{border-color:var(--covered-border);color:var(--covered-text);background:#0a1520;cursor:default}
+.btn-ign.folder-done{border-color:var(--folder-ign-border);color:var(--folder-ign-text);background:#150a25}
+.btn-ign.covered{border-color:var(--covered-border);color:var(--covered-text);background:#0a1520}
 .btn-ign.fail{border-color:var(--danger);color:var(--danger)}
 
 .section-label{
@@ -218,7 +252,7 @@ header{
   <div class="search-wrap">
     <div class="search-box">
       <span class="search-ico">🔍</span>
-      <input id="search-input" type="search" placeholder="Buscar archivo…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onSearch(this.value)">
+      <input id="search-input" type="search" placeholder="Buscar archivo o carpeta…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onSearch(this.value)">
       <button id="search-clear" onclick="clearSearch()">✕</button>
     </div>
   </div>
@@ -247,7 +281,7 @@ header{
 const BASE = "http://100.93.228.17:8766";
 
 let allFiles   = [];
-let ignoredSet = new Set();   // explicit patterns
+let allFolders = [];
 let filter     = "all";
 let query      = "";
 
@@ -259,8 +293,15 @@ async function loadFiles() {
   try {
     const res  = await fetchWithTimeout(BASE + "/files", 4500);
     const data = await res.json();
-    allFiles   = data;
-    ignoredSet = new Set(data.filter(f => f.ignored).map(f => f.rel));
+    // El servidor devuelve { files: [...], folders: [...] }
+    // Soporte retrocompatible: si devuelve array directo (versión vieja)
+    if (Array.isArray(data)) {
+      allFiles   = data;
+      allFolders = [];
+    } else {
+      allFiles   = data.files   || [];
+      allFolders = data.folders || [];
+    }
     setDot("ok", "en línea");
     showMain();
     updateCounts();
@@ -273,6 +314,15 @@ async function loadFiles() {
 
 async function retryConnect() { await loadFiles(); }
 
+/* ── actualizar estado local tras respuesta del servidor ── */
+function applyServerData(data) {
+  if (data.files)   allFiles   = data.files;
+  if (data.folders) allFolders = data.folders;
+  updateCounts();
+  renderList();
+}
+
+/* ── ignore / unignore de ARCHIVO ── */
 async function doIgnore(rel, rootRel, subdir) {
   try {
     const res  = await fetch(BASE + "/ignore", {
@@ -282,12 +332,7 @@ async function doIgnore(rel, rootRel, subdir) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
-    if (data.files) {
-      allFiles   = data.files;
-      ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
-    }
-    updateCounts();
-    renderList();
+    applyServerData(data);
     let msg = "Agregado a .plexignore";
     if (data.added && data.added.length > 1)  msg += ` (${data.added.join(", ")})`;
     if (data.skipped && data.skipped.length)  msg += ` · ${data.skipped.length} ya cubiertos`;
@@ -306,18 +351,43 @@ async function doUnignore(rel, rootRel, subdir) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
-
-    if (data.files) {
-      allFiles   = data.files;
-      ignoredSet = new Set(data.files.filter(f => f.ignored).map(f => f.rel));
-    }
-
-    updateCounts();
-    renderList();
-
+    applyServerData(data);
     let msg = "Eliminado de .plexignore";
     if (data.removed && data.removed.length) msg += `: ${data.removed.join(", ")}`;
     toast(msg);
+  } catch(err) {
+    toast("Error: " + err.message, true);
+  }
+}
+
+/* ── ignore / unignore de CARPETA ── */
+async function doIgnoreFolder(folderName) {
+  try {
+    const res  = await fetch(BASE + "/ignore_folder", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ folder: folderName })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    applyServerData(data);
+    toast(`Carpeta ignorada: ${folderName}/*`);
+  } catch(err) {
+    toast("Error: " + err.message, true);
+  }
+}
+
+async function doUnignoreFolder(folderName) {
+  try {
+    const res  = await fetch(BASE + "/unignore_folder", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ folder: folderName })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    applyServerData(data);
+    toast(`Carpeta des-ignorada: ${folderName}`);
   } catch(err) {
     toast("Error: " + err.message, true);
   }
@@ -337,7 +407,7 @@ function clearSearch() {
 }
 
 /* ── render ── */
-function getVisible() {
+function getVisibleFiles() {
   let list = allFiles;
   if (filter === "ignored") list = list.filter(f => f.ignored);
   if (filter === "normal")  list = list.filter(f => !f.ignored);
@@ -348,23 +418,56 @@ function getVisible() {
   return list;
 }
 
-function renderList() {
-  const listEl  = document.getElementById("list");
-  const visible = getVisible();
+function getVisibleFolders() {
+  let list = allFolders;
+  if (filter === "ignored") list = list.filter(f => f.ignored);
+  if (filter === "normal")  list = list.filter(f => !f.ignored);
+  if (query) list = list.filter(f => {
+    const t = f.name.toLowerCase();
+    return t.includes(query) || t.replace(/\./g, ' ').includes(query);
+  });
+  return list;
+}
 
-  if (!visible.length) {
+function renderList() {
+  const listEl        = document.getElementById("list");
+  const visibleFiles  = getVisibleFiles();
+  const visibleFolders = getVisibleFolders();
+  const totalVisible  = visibleFolders.length + visibleFiles.length;
+
+  if (!totalVisible) {
     listEl.innerHTML = `<div class="empty"><div class="ei">${query ? "🔎" : "🎬"}</div>${query ? "Sin resultados para \"" + esc(query) + "\"" : "Sin archivos en esta categoría"}</div>`;
     return;
   }
 
-  // Server already returns newest-first. Just render in order.
   listEl.innerHTML = "";
-  visible.forEach((f, i) => listEl.appendChild(buildCard(f, i)));
+  let idx = 0;
+
+  // 1. Primero las carpetas (con su fila propia)
+  if (visibleFolders.length) {
+    const lbl = document.createElement("div");
+    lbl.className = "section-label";
+    lbl.textContent = "📁 Carpetas";
+    listEl.appendChild(lbl);
+    visibleFolders.forEach(f => {
+      listEl.appendChild(buildFolderCard(f, idx++));
+    });
+  }
+
+  // 2. Luego los archivos individuales
+  if (visibleFiles.length) {
+    const lbl = document.createElement("div");
+    lbl.className = "section-label";
+    lbl.textContent = "🎬 Archivos";
+    listEl.appendChild(lbl);
+    visibleFiles.forEach(f => {
+      listEl.appendChild(buildCard(f, idx++));
+    });
+  }
 }
 
 function highlight(text, q) {
   if (!q) return esc(text);
-  // Try to match against "dots as spaces" version too
   const textDots   = text.toLowerCase();
   const textSpaces = textDots.replace(/\./g, ' ');
   let idx = textDots.indexOf(q);
@@ -375,24 +478,80 @@ function highlight(text, q) {
     + esc(text.slice(idx + q.length));
 }
 
+/* ── tarjeta de CARPETA ── */
+function buildFolderCard(f, i) {
+  const isIgnored = f.ignored;
+  const card = document.createElement("div");
+  card.className = "folder-card" + (isIgnored ? " ignored" : "");
+  card.style.animationDelay = Math.min(i * 18, 280) + "ms";
+  card.dataset.folder = f.name;
+
+  const ico      = isIgnored ? "🚫" : "📁";
+  const btnLabel = isIgnored ? "✕ Quitar" : "⊘ Ignorar";
+  const btnClass = "btn-ign" + (isIgnored ? " folder-done" : "");
+
+  const badge = isIgnored
+    ? `<span class="badge b-folder-ign">carpeta ignorada</span>`
+    : `<span class="badge b-folder">${f.file_count} archivo${f.file_count !== 1 ? "s" : ""}</span>`;
+
+  card.innerHTML = `
+    <div class="ico">${ico}</div>
+    <div class="cbody">
+      <div class="ctitle" title="${esc(f.name)}">${highlight(f.name, query)}</div>
+      <div class="cmeta">${badge}</div>
+    </div>
+    <button class="${btnClass}" data-folder="${esc(f.name)}">${btnLabel}</button>`;
+
+  card.addEventListener("click", e => {
+    if (!e.target.closest("button")) handleFolderToggle(e, f.name, isIgnored);
+  });
+  card.querySelector("button").addEventListener("click", e => {
+    e.stopPropagation();
+    handleFolderToggle(e, f.name, isIgnored);
+  });
+  return card;
+}
+
+async function handleFolderToggle(e, folderName, currentlyIgnored) {
+  const card = document.querySelector(`.folder-card[data-folder="${CSS.escape(folderName)}"]`);
+  if (!card || card.classList.contains("busy")) return;
+  card.classList.add("busy");
+  const btn = card.querySelector("button");
+  if (btn) btn.textContent = "…";
+  if (currentlyIgnored) {
+    await doUnignoreFolder(folderName);
+  } else {
+    await doIgnoreFolder(folderName);
+  }
+}
+
+/* ── tarjeta de ARCHIVO ── */
 function buildCard(f, i) {
-  const isCoveredByDir = f.covered_by_dir && !f.ignored_explicitly;
-  const isIgnored      = f.ignored;
-  const inSubdir       = !!f.subdir;
+  // Un archivo está "cubierto por carpeta" solo si:
+  //   - covered_by_dir está presente Y
+  //   - NO está ignorado explícitamente (es decir, es solo pasivo)
+  // PERO igualmente debe poder tocarse para ignorarlo de forma individual si se quiere.
+  // La única excepción donde bloqueamos la acción es si covered_by_dir y ignored son true
+  // porque la carpeta ya lo cubre, no tiene sentido doble-ignorar desde el archivo.
+  const isCoveredPassive = f.covered_by_dir && !f.ignored_explicitly;
+  const isIgnored        = f.ignored;
+  const inSubdir         = !!f.subdir;
 
   const card = document.createElement("div");
   let cardClass = "card";
-  if (isCoveredByDir)    cardClass += " covered";
-  else if (isIgnored)    cardClass += " ignored";
+  if (isCoveredPassive) cardClass += " covered";
+  else if (isIgnored)   cardClass += " ignored";
   card.className = cardClass;
   card.style.animationDelay = Math.min(i * 18, 280) + "ms";
   card.dataset.rel = f.rel;
 
-  // Icon: 📂 = inside Radarr/media folder, 🚫 = ignored, 🎬 = normal root
-  const ico = isCoveredByDir ? "📁" : (isIgnored ? "🚫" : (inSubdir ? "📂" : "🎬"));
+  // Ícono: 🚫 ignorado explícitamente | 📂 en subcarpeta normal | 🎬 raíz normal
+  // (NO mostramos 📁 en archivos individuales — ese ícono es solo para las filas de carpeta)
+  const ico = isIgnored ? "🚫" : (inSubdir ? "📂" : "🎬");
 
   let btnLabel, btnClass;
-  if (isCoveredByDir) {
+  if (isCoveredPassive) {
+    // Cubierto por carpeta — el botón informa pero no bloquea la acción individual
     btnLabel = "📁 carpeta";
     btnClass = "btn-ign covered";
   } else if (isIgnored) {
@@ -406,7 +565,7 @@ function buildCard(f, i) {
   const rRel   = esc(f.root_rel || f.rel);
   const subdir = esc(f.subdir   || "");
 
-  const badge = isCoveredByDir
+  const badge = isCoveredPassive
     ? `<span class="badge b-covered" title="${esc(f.covered_by_dir)}">carpeta ignorada</span>`
     : (isIgnored ? `<span class="badge b-ignored">ignorado</span>` : "");
 
@@ -416,10 +575,11 @@ function buildCard(f, i) {
       <div class="ctitle" title="${esc(f.rel)}">${highlight(f.title, query)}</div>
       <div class="cmeta">${badge}</div>
     </div>
-    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rRel}','${subdir}')"${isCoveredByDir ? " disabled" : ""}>
+    <button class="${btnClass}" onclick="handleIgnore(event,'${esc(f.rel)}','${rRel}','${subdir}')">
       ${btnLabel}
     </button>`;
 
+  // Click en cualquier parte de la card (no en el botón) también togglea
   card.addEventListener("click", e => {
     if (!e.target.closest("button")) handleIgnore(e, f.rel, f.root_rel || f.rel, f.subdir || "");
   });
@@ -431,13 +591,20 @@ async function handleIgnore(e, rel, rootRel, subdir) {
   const card    = document.querySelector(`.card[data-rel="${CSS.escape(rel)}"]`);
   const fileObj = allFiles.find(f => f.rel === rel);
   if (!card || card.classList.contains("busy")) return;
-  if (fileObj?.covered_by_dir && !fileObj?.ignored_explicitly) return;
+  // Si está cubierto pasivamente por carpeta, NO bloqueamos — dejamos que el usuario
+  // pueda igualmente ignorar/des-ignorar el archivo individual si lo desea.
+  // Solo bloqueamos si el archivo no existe en nuestros datos (caso extremo).
+  if (!fileObj) return;
   card.classList.add("busy");
   const btn = card.querySelector(".btn-ign");
   if (btn) btn.textContent = "…";
-  if (fileObj?.ignored) {
+  if (fileObj.ignored && fileObj.ignored_explicitly) {
     await doUnignore(rel, rootRel, subdir);
+  } else if (!fileObj.ignored) {
+    await doIgnore(rel, rootRel, subdir);
   } else {
+    // Cubierto por carpeta pero no ignorado explícitamente:
+    // la acción de ignorar individual tiene sentido de todas formas
     await doIgnore(rel, rootRel, subdir);
   }
 }
@@ -451,10 +618,11 @@ function setFilter(f, el) {
 }
 
 function updateCounts() {
-  const ignCount = allFiles.filter(f => f.ignored).length;
-  document.getElementById("lbl-count").textContent = allFiles.length;
+  const ignFiles   = allFiles.filter(f => f.ignored).length;
+  const ignFolders = allFolders.filter(f => f.ignored).length;
+  document.getElementById("lbl-count").textContent = allFiles.length + allFolders.length;
   const lbl = document.getElementById("lbl-ign");
-  lbl.textContent = ignCount;
+  lbl.textContent = ignFiles + ignFolders;
   lbl.classList.remove("just-added");
   void lbl.offsetWidth;
   lbl.classList.add("just-added");
